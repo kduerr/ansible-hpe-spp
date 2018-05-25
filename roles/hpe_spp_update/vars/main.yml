@@ -1,0 +1,25 @@
+---
+# 
+# control hpe spp updates
+#   
+vdebugvar: false
+
+# Supported models
+hpe_supported_models: "(G6|G7|Gen8|Gen9)"
+
+# Older iLO models do not have an rpm package - will url download
+#  this is iLO fw version 2.29 for ilO 2
+ilo2_package_url: http://168.94.70.207/linux_utils/CP027871.scexe
+#  this is iLO fw version 1.88 for iLO 3
+ilo3_package_url: http://16.1.1.21/deployment/CP029099.scexe
+
+# controll the clean up of *extra* rpm (not used rpms) 
+hpe_rpm_cleanup: true
+
+# Controll wether to install System Managment Homepage
+install_hpesmh: false
+
+#  Set the subscription manager pool ID
+#  If running in BDC:         poolID = 2c90dda25b1f5524015b87e083cd20dc
+#  If running in DEN:         poolID = 28de693f5b7c19fd015b87f9f4b404ca
+hpe_spp_repo:  "{{ '2c90dda25b1f5524015b87e083cd20dc' if SiteID == 'BDC' else '28de693f5b7c19fd015b87f9f4b404ca' if SiteID == 'Denver' else '2c90dda25b1f5524015b87e083cd20dc' }}"

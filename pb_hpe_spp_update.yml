@@ -1,0 +1,11 @@
+---
+# This playbook deploys the HPE SPP (fw and tools) to target servers
+# 
+#   
+# 20170321 kd
+ 
+- name: HPE SPP update
+  hosts: hpe_targets
+  become: true
+  roles:
+    - hpe_spp_update

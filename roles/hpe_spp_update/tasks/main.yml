@@ -1,0 +1,272 @@
+---
+# This role deploys the HPE SPP (fw and tools) to target servers
+#
+# the SPP payload of updates (repo) is defined in the vars
+# the role also copies a template snmpd.conf file into place
+#  
+#  Targeted for RHEL 5, 6, and 7   (20170517)
+#
+#
+
+  - name: add repo - BBY-HPE custom SPP201610
+    yum_repository:
+     name: BBY-HPE-custom-SPP201610
+     description: SPP custom repo updates based on SPP201610
+     baseurl: http://10.1.1.12:/repo/hpspp201610-custom
+     gpgkey: http://downloads.linux.hpe.com/SDR/repo/hpsum/GPG-KEY-hpsum
+     gpgcheck: no
+
+  - name: checking rhel version . must be rhel 6 or greater --- {{ ansible_distribution_major_version }}
+    fail: msg="server must be running rhel 6 or greater . it is running {{ ansible_distribution_major_version }}"
+    when: not ansible_distribution_major_version|int >= 6
+
+  - name: capture server model from dmidecode -s system-product-name command
+    shell: dmidecode -s system-product-name
+    register: server_model
+
+  - name: checking this server '{{server_model.stdout_lines[0]}}' is supported - must be {{ hpe_supported_models }}
+    fail: msg="server model '{{server_model.stdout_lines[0]}}' does not match supported models for this playbook - expect the following {{hpe_supported_models}}"
+    when: not server_model.stdout_lines[0]|search(hpe_supported_models)
+
+  - name: create log directory - /var/hp/log
+    file: path=/var/hp/log state=directory mode=0775 recurse=yes
+
+  - set_fact:
+     hpe_firmware_rpms2keep: "/var/hp/log/hpe_firmware_rpms2keep-{{ ansible_date_time.iso8601 }}.txt"
+     hpe_firmware_rpms2remove: "/var/hp/log/hpe_firmware_rpms2remove-{{ ansible_date_time.iso8601 }}.txt"
+    
+  #- name: execute permission set on /tmp  to execute hpsum
+  #  command: mount -o remount,exec /tmp
+  #  tags:
+  #    - t_tmp_exec
+
+  #- name: execute permission set on /var/tmp  to execute hpsum
+  #  command: mount -o remount,exec /var/tmp
+  #  when: ansible_distribution_major_version|int == 7
+  #  tags:
+  #    - t_tmp_exec
+
+  - name: list hp installed rpms (pre-step)
+    shell: rpm -qa | grep -iE 'hp|ssa'
+    args:
+     warn: false
+    when: vdebugvar
+    register: rpm_qa_hp_packages
+
+  - debug: var=rpm_qa_hp_packages.stdout_lines
+    when: vdebugvar
+
+  - name: enabling subscription-manager
+    command: "subscription-manager attach --pool={{ hpe_spp_repo }}"
+    ignore_errors: yes
+
+  - name: defining hpe gpg pub keys for hpe rpms
+    set_fact:
+     hpe_gpg_key_files:
+      - hpPublicKey1024.pub
+      - hpPublicKey2048.pub
+      - hpPublicKey2048_key1.pub
+      - hpePublicKey2048_key1.pub
+      - hpe-GPG-KEY-bl920-wbem.pub
+    tags:
+      - t_gpg_key
+
+  - name: make copy of hpe pub gpgkeys on dest server for import
+    template: src="{{ item }}.j2" dest="./{{ item }}"
+    with_items: "{{ hpe_gpg_key_files }}"
+    tags:
+      - t_gpg_key
+
+  - name: import hpe pub gpg keys
+    rpm_key: key="./{{ item }}" state=present
+    with_items: "{{ hpe_gpg_key_files }}"
+    tags:
+      - t_gpg_key
+
+  - name: hpe pub gpg key file cleanup
+    file: path="./{{ item }}" state=absent
+    with_items: "{{ hpe_gpg_key_files }}"
+    tags:
+      - t_gpg_key
+
+#  - name: Enable HPE repo
+#    command: subscription-manager repos --enable=BBY_Platform_hp_spp_hp_spp
+#    ignore_errors: yes
+#    tags:
+#      - t_enable_hpe 
+
+
+  - name: install HPE SPP server common utils from {{ hpe_spp_repo }}
+    yum: name={{ item }}  state=latest 
+    with_items:
+     - HP-CNA-FC-hpqlgc-Enablement-Kit
+     - hpsum-*.rhel{{ ansible_distribution_major_version }}.{{ ansible_architecture }}
+    tags:
+      - t_hpe_core
+
+  - name: install HPE SPP server agents and utils from {{ hpe_spp_repo }} unless superdome
+    yum: name={{ item }}  state=latest 
+    with_items:
+     - hp-snmp-agents-*.rhel{{ansible_distribution_major_version}}.{{ ansible_architecture }}
+     - hp-health*.rhel{{ansible_distribution_major_version}}.{{ ansible_architecture }}
+     - hponcfg*.{{ ansible_architecture }}
+     - ssa*.{{ ansible_architecture }}
+     - ssacli*.{{ ansible_architecture }}
+     - ssaducli*.{{ ansible_architecture }}
+    when: ansible_distribution_major_version|int >= 6 and not server_model.stdout_lines[0]|search("Superdome2")
+    tags:
+      - t_hpe_agent_utils
+
+
+  - name: if superdome - add wbem monitoring pre-req and packages - '{{server_model.stdout_lines[0]}}'
+    yum: name={{ item }}  state=latest 
+    with_items:
+     - tog-pegasus
+     - openwsman-server
+     - OpenIPMI 
+     - policycoreutils-python
+     - hpmgmtbase
+     - hp-smx 
+     - hpshd    
+     - hp-smx-EnableWsman 
+    when: server_model.stdout_lines[0]|search("Superdome2")
+
+
+  - name: superdome clean-up if needed . remove un-used items
+    yum: name={{ item }}  state=absent 
+    with_items:
+     - hp-snmp-agents
+     - hp-health
+     - hponcfg
+     - ssa
+     - ssacli
+     - ssaducli
+    when: ansible_distribution_major_version|int >= 6 and server_model.stdout_lines[0]|search("Superdome2")
+    tags:
+      - t_hpe_sdx_cleanup
+
+  - name: place snmpd.conf config in /etc/snmp/snmpd.conf
+    template: src=snmpd.j2 dest=/etc/snmp/snmpd.conf owner=root group=root mode=0600 backup=yes
+    when: not server_model.stdout_lines[0]|search("Superdome2")
+    tags:
+      - t_snmpd
+
+  - name: restarting snmpd related services
+    service: name={{ item }} state=restarted
+    with_items:
+     - snmpd
+     - hp-snmp-agents
+    when: not server_model.stdout_lines[0]|search("Superdome2")
+    tags:
+      - t_service_start
+
+  - name: yum removal of hp-firmware-* pkgs - clean starting point
+    yum: name="hp-firmware-*" state=absent
+    when: hpe_rpm_cleanup
+    tags:
+      - t_hpe_rpme_cleanup
+
+  - name: yum install hpe fw pkgs with 'hpsum requires' command
+    shell: yum -y install $(hpsum requires)
+    args:
+     warn: false
+    register: yum_with_hpsum_requires
+
+  - debug: var=yum_with_hpsum_requires.stdout_lines
+    when: vdebugvar
+
+  - name: list hp installed rpms (mid-step)
+    shell: rpm -qa | grep -iE 'hp|ssa'
+    args:
+     warn: false
+    when: vdebugvar
+    register: rpm_qa_hp_packages
+
+  - name: show output from rpm query of hp or ssa pkgs
+    debug: var=rpm_qa_hp_packages.stdout_lines
+    when: vdebugvar
+
+  - name: execute 'hpsum -y upgrade' command
+    shell: hpsum -y upgrade
+    args:
+     warn: false
+    register: hpsum_upgrade
+
+  - debug: var=hpsum_upgrade.stdout_lines
+
+  - name: capture 'hpsum list' cmd output in file rpms2keep.txt
+    shell: hpsum list | grep -E 'smartarray-|hdd-' | awk -F" " '{print $3}' > {{ hpe_firmware_rpms2keep }}
+    args:
+     warn: false
+    when: hpe_rpm_cleanup
+    register: hpsum_list_rpms2keep
+
+  - name: create list of rpms to remove - pkgs names saved in file {{ hpe_firmware_rpms2remove }}
+    shell: rpm -qa 'hp-*' | grep -E 'smartarray-|hdd-' | grep -vf {{ hpe_firmware_rpms2keep }}  > {{ hpe_firmware_rpms2remove }}
+    args:
+     warn: false
+    when: hpe_rpm_cleanup
+    register: hpsum_list_rpms2remove
+
+  - name: getting file stats of {{ hpe_firmware_rpms2remove }}
+    stat:
+     path: "{{ hpe_firmware_rpms2remove }}"
+    register: hpe_firmware_rpms2remove_stat
+
+  - name: slurp file {{ hpe_firmware_rpms2remove }} content
+    slurp:
+     src: "{{ hpe_firmware_rpms2remove }}"
+    register: slurped_hpe_firmware_rpms2remove
+
+  - name: show file {{ hpe_firmware_rpms2remove }} content (to be removed)
+    debug: msg="{{ (slurped_hpe_firmware_rpms2remove.content|b64decode).splitlines() }}"
+
+  - name: yum removal of non-used hp-*firmware* pkgs 
+    yum: name={{ (slurped_hpe_firmware_rpms2remove.content|b64decode).splitlines() }}  state=absent 
+    when: hpe_rpm_cleanup and hpe_firmware_rpms2remove_stat.stat.size > 0
+    tags:
+      - t_hpe_rpme_cleanup2
+
+  - name: list hp installed rpms (post-step)
+    shell: rpm -qa | grep -iE 'hp|ssa'
+    args:
+     warn: false
+    register: rpm_qa_hp_packages
+    tags:
+      - t_rpm_list_hpe
+
+  - debug: var=rpm_qa_hp_packages.stdout_lines
+    tags:
+      - t_rpm_list_hpe
+
+  - name: legacy ilo2 package download if G6 model server 
+    get_url: url={{ ilo2_package_url }} dest=/tmp/ilo_fw.scexe mode=u+x
+    when: server_model.stdout_lines[0]|search("G6")
+
+  - name: legacy ilo3 package download is G7 model server
+    get_url: url={{ ilo3_package_url }} dest=/tmp/ilo_fw.scexe mode=u+x
+    when: server_model.stdout_lines[0]|search("Gen8")
+  
+  - name: legacy ilo2 or ilo3 package execution if G6 or G7 -  {{ server_model.stdout_lines[0] }}
+    shell: /tmp/ilo_fw.scexe -s
+    when: server_model.stdout_lines[0]|search("(G6|Gen8)") 
+
+  - name: capture 'hpsum list' command output after updating
+    shell: hpsum list
+    args:
+     warn: false
+    register: hpsum_list
+
+  - debug: var=hpsum_list.stdout_lines
+  
+  - name: when done remount tmp with no exec
+    command: "mount -o remount,noexec {{ item }}"
+    with_items:
+    - /var/tmp
+    - /tmp
+    when: ansible_distribution_major_version|int == 7
+    tags:
+      - t_tmp_noexec
+
+
+
