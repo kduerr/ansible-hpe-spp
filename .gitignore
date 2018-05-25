@@ -1,1 +1,1 @@
-./roles/hpe_spp_update/templates/snmpd.j2
+roles/hpe_spp_update/templates/snmpd.j2

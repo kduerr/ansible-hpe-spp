@@ -4,13 +4,13 @@
 # the SPP payload of updates (repo) is defined in the vars
 # the role also copies a template snmpd.conf file into place
 #  
-#  Targeted for RHEL 5, 6, and 7   (20170517)
+#  Targeted for RHEL 6 and 7 
 #
 #
 
-  - name: add repo - BBY-HPE custom SPP201610
+  - name: add repo - HPE custom SPP
     yum_repository:
-     name: BBY-HPE-custom-SPP201610
+     name: HPE-custom-SPP201610
      description: SPP custom repo updates based on SPP201610
      baseurl: http://10.1.1.12:/repo/hpspp201610-custom
      gpgkey: http://downloads.linux.hpe.com/SDR/repo/hpsum/GPG-KEY-hpsum
@@ -90,7 +90,7 @@
       - t_gpg_key
 
 #  - name: Enable HPE repo
-#    command: subscription-manager repos --enable=BBY_Platform_hp_spp_hp_spp
+#    command: subscription-manager repos --enable=Platform_hp_spp_hp_spp
 #    ignore_errors: yes
 #    tags:
 #      - t_enable_hpe 
