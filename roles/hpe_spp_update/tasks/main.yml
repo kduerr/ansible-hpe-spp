@@ -34,17 +34,28 @@
   - set_fact:
      hpe_firmware_rpms2keep: "/var/hp/log/hpe_firmware_rpms2keep-{{ ansible_date_time.iso8601 }}.txt"
      hpe_firmware_rpms2remove: "/var/hp/log/hpe_firmware_rpms2remove-{{ ansible_date_time.iso8601 }}.txt"
-    
-  #- name: execute permission set on /tmp  to execute hpsum
-  #  command: mount -o remount,exec /tmp
-  #  tags:
-  #    - t_tmp_exec
-
-  #- name: execute permission set on /var/tmp  to execute hpsum
-  #  command: mount -o remount,exec /var/tmp
-  #  when: ansible_distribution_major_version|int == 7
-  #  tags:
-  #    - t_tmp_exec
+ 
+  - command: mountpoint -q {{ item }}
+    register: mount_stat_{{ item }}
+    failed_when: False
+    changed_when: False
+    with_items:
+     - /tmp
+     - /var/tmp
+   
+  - name: execute permission set on /tmp to execute hpsum
+    # Note: this will revert back on reboot is no exec was set
+    command: mount -o remount,exec /tmp
+    when: "mount_stat_/tmp".rc == 0
+    tags:
+      - t_tmp_exec
+     
+  - name: execute permission set on /var/tmp  to execute hpsum
+    # Note: this will revert back on reboot is no exe was set
+    command: mount -o remount,exec /var/tmp
+    when: "mount_stat_/var/tmp".rc == 0
+    tags:
+      - t_tmp_exec
 
   - name: list hp installed rpms (pre-step)
     shell: rpm -qa | grep -iE 'hp|ssa'
