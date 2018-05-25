@@ -1,0 +1,34 @@
+---
+# 
+# control hpe spp updates
+#   
+vdebugvar: false
+
+# Supported models
+hpe_supported_models: "(G6|G7|Gen8|Gen9|Gen9|Gen10)"
+
+# Older iLO models do not have an rpm package - will url download
+#  this is iLO fw version 2.29 for ilO 2
+ilo2_package_url: http://10.1.2.3/linux_utils/CP027871.scexe
+#  this is iLO fw version 1.88 for iLO 3
+ilo3_package_url: http://10.1.2.4/deployment/CP029099.scexe
+
+# controll the clean up of *extra* rpm (not used rpms) 
+hpe_rpm_cleanup: true
+
+# Controll wether to install System Managment Homepage
+install_hpesmh: false
+
+# Try to set the 'siteid' if possible by evaluating the hostname
+#  regexp pattern check for BDC, Denver, or Richfield hostname standards
+site_dc1: "{{ 'DC1' if ( ansible_fqdn | regex_search('^\\w{3}\\d{1}1\\S+') ) else '' }}"
+site_dc2: "{{ 'DC2' if ( ansible_fqdn | regex_search('^\\w{3}\\d{1}2\\S+') ) else '' }}"
+site_dc3: "{{ 'DC3' if ( ansible_fqdn | regex_search('^\\w{3}\\d{1}3\\S+') ) else '' }}"
+# One of the above should be set, other are null....
+siteid: "{{ site_dc1 + site_dc2 + site_dc3 }}"
+
+
+#  Set the subscription manager pool ID
+#  If running in DC1:         poolID = 2c90dda25b1f5524015b87e083cd2999
+#  If running in DC2:         poolID = 28de693f5b7c19fd015b87f9f4b40888
+hpe_spp_repo:  "{{ '2c90dda25b1f5524015b87e083cd2999' if SiteID == 'DC1' else '28de693f5b7c19fd015b87f9f4b40888' if SiteID == 'DC2' else '2c90dda25b1f5524015b87e083cd2999' }}"
