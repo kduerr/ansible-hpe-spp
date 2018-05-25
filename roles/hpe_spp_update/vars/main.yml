@@ -9,7 +9,7 @@ hpe_supported_models: "(G6|G7|Gen8|Gen9|Gen10)"
 
 # Older iLO models do not have an rpm package - will url download
 #  this is iLO fw version 2.29 for ilO 2
-ilo2_package_url: http://168.94.70.207/linux_utils/CP027871.scexe
+ilo2_package_url: http://16.1.1.21/linux_utils/CP027871.scexe
 #  this is iLO fw version 1.88 for iLO 3
 ilo3_package_url: http://16.1.1.21/deployment/CP029099.scexe
 
