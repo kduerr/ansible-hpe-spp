@@ -13,8 +13,30 @@ ilo2_package_url: http://168.94.70.207/linux_utils/CP027871.scexe
 #  this is iLO fw version 1.88 for iLO 3
 ilo3_package_url: http://16.1.1.21/deployment/CP029099.scexe
 
+##########################
+##  control AMS behavior
+##
+# Control choice to install AMS on AMS capable systems (iLO4+)
+install_hpeams: true
+
+# Control choice to configure iLO for community string and trap (used with AMS)
+config_ilosnmp:  true
+
+# Control choice to UN-install OS Insight Mgmt agent on AMS capable systems (iLO4+)
+uninstall_hpeima: false
+
+# Control choice to install OS Insight Mgmt agen / hphealth on AMS capable systems (iLO4+)
+#  this causes SNMP to be used within the OS
+install_hpeima: true
+
+# Control choice to set snmpd service params (read community, trap dest, allow & etc)
+config_ossnmp: true
+
 # controll the clean up of *extra* rpm (not used rpms) 
 hpe_rpm_cleanup: true
+
+# Controll wether to install System Managment Homepage
+install_hpesmh: false
 
 # Controll wether to install System Managment Homepage
 install_hpesmh: false
